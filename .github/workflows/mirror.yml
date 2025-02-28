@@ -75,7 +75,6 @@ jobs:
           # 创建一个空的临时文件
           output_file="docker-compose-mirror.yml"
           echo "" > "$output_file"  # 清空输出文件，确保每次生成新的文件
-
           # 读取 docker-compose.yml 文件并逐行处理
           while IFS= read -r line; do
             # 如果该行包含 image: 字段
@@ -85,33 +84,23 @@ jobs:
               # 获取镜像的名字和标签部分
               image_name=$(echo $image | cut -d':' -f1)
               image_tag=$(echo $image | cut -d':' -f2)
-
               # 检查镜像名是否包含 "/"
-              if [[ "$image_name" == *"/"* ]]; then
-                # 如果镜像名有 "/", 提取后半部分作为镜像名
-                new_image="registry.cn-beijing.aliyuncs.com/supabase_mirror/$(echo $image_name | cut -d'/' -f2):$image_tag"
-              else
-                # 如果没有 "/", 则直接在镜像名上加上前缀 "supabase_mirror/"
-                new_image="registry.cn-beijing.aliyuncs.com/supabase_mirror/$image_name:$image_tag"
-              fi
-
+             
               # 获取当前行的前导空格（缩进）
               indent=$(echo "$line" | sed -E 's/^([[:space:]]*).*$/\1/')
-
               # 输出新的镜像名称，并保持正确的缩进
+              new_image="${ALIYUN_REGISTRY}/${ALIYUN_NAME_SPACE}/${image_name_tag}"
               echo "${indent}image: $new_image" >> "$output_file"
             else
               # 如果该行不包含 image: 字段，直接写入输出文件
               echo "$line" >> "$output_file"
             fi
           done < docker-compose.yml  # 从原文件读取
-
       
       - name: Configure Git
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
       # 提交并推送 image.txt 文件
       - name: Commit and Push
         run: |
@@ -124,6 +113,9 @@ jobs:
     name: push updated images to aliyun
     runs-on: ubuntu-24.04
     needs: extract-docker-images
+    env:
+      ALIYUN_REGISTRY: "crpi-zw3p6lzef7gd5ljw.cn-hangzhou.personal.cr.aliyuncs.com"
+      ALIYUN_NAME_SPACE: "pessdocker/supabase"
     steps:
     - name: Before freeing up disk space
       run: |
@@ -131,7 +123,6 @@ jobs:
         echo "=============================================================================="
         df -hT
         echo "=============================================================================="
-
     # 增加可用磁盘空间
     - name: Maximize build space
       uses: easimon/maximize-build-space@master
@@ -151,7 +142,6 @@ jobs:
         echo "=============================================================================="
         df -hT
         echo "=============================================================================="
-
     - name: Checkout Code
       uses: actions/checkout@v4
       with:
@@ -181,7 +171,7 @@ jobs:
             # 获取镜像名:版本号  例如nginx:1.25.3
             image_name_tag=$(echo "$image" | awk -F'/' '{print $NF}')
             echo "image_name_tag $image_name_tag"
-            # 获取命名空间 例如kasmweb,  这里有种特殊情况 docker.io/nginx，把docker.io当成命名空间，也OK
+            # 获取命名空间 例如kasmweb  这里有种特殊情况 docker.io/nginx，把docker.io当成命名空间，也OK
             name_space=$(echo "$image" | awk -F'/' '{if (NF==3) print $2; else if (NF==2) print $1; else print ""}')
             echo "name_space: $name_space"
             # 这里不要是空值影响判断
@@ -224,14 +214,13 @@ jobs:
             echo "platform_prefix is $platform_prefix"
             # 获取镜像的完整名称，例如kasmweb/nginx:1.25.3（命名空间/镜像名:版本号）
             image=$(echo "$line" | awk '{print $NF}')
-
             # 获取 镜像名:版本号  例如nginx:1.25.3
             image_name_tag=$(echo "$image" | awk -F'/' '{print $NF}')
             # 获取命名空间 例如kasmweb  这里有种特殊情况 docker.io/nginx，把docker.io当成命名空间，也OK
             name_space=$(echo "$image" | awk -F'/' '{if (NF==3) print $2; else if (NF==2) print $1; else print ""}')
             # 获取镜像名例  例如nginx
             image_name=$(echo "$image_name_tag" | awk -F':' '{print $1}')
-        
+         
             name_space_prefix=""
             # 如果镜像名重名
             if [[ -n "${duplicate_images[$image_name]}" ]]; then
@@ -240,9 +229,8 @@ jobs:
                   name_space_prefix="${name_space}_"
                fi
             fi
-            
-            # 将@sha256:等字符删除
-            image_name_tag="${image_name_tag%%@*}"
+             # 将@sha256:等字符删除
+            #image_name_tag="${image_name_tag%%@*}"
             new_image="$ALIYUN_REGISTRY/$ALIYUN_NAME_SPACE/$platform_prefix$name_space_prefix$image_name_tag"
             echo "docker tag $image $new_image"
             docker tag $image $new_image
